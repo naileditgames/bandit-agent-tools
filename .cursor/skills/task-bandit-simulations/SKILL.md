@@ -135,8 +135,18 @@ Upload all variant/strategy directories from one session under a shared timestam
    ```bash
    SESSION_TS=$(date -u '+%Y-%m-%d_%H-%M-%S')
    ```
-2. Upload each result directory via the `gcloud` MCP server:
+2. Upload each result directory via `gsutil` (install gcloud CLI if missing):
    ```bash
+   # Install (cloud agents)
+   curl -sSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz -o /tmp/gcloud.tar.gz
+   tar -xzf /tmp/gcloud.tar.gz -C /tmp
+   export PATH="/tmp/google-cloud-sdk/bin:$PATH"
+
+   # Auth with service account (decode via python — echo|base64 may fail on multiline values)
+   python3 -c "import os,base64; open('/tmp/gcp-sa.json','wb').write(base64.b64decode(os.environ['GCP_SERVICE_ACCOUNT_KEY_B64']))"
+   gcloud auth activate-service-account --key-file=/tmp/gcp-sa.json
+   gcloud config set project gameslobby
+
    gsutil -m cp -r tmp/results/<GameName><Variant>_default \
      gs://bandit-simulation-results/<GameName>/$SESSION_TS/
    ```
@@ -146,7 +156,7 @@ Upload all variant/strategy directories from one session under a shared timestam
 
 **Only when the task was triggered from a Jira ticket** — e.g. the user references a ticket key (`NKIT-676`) or the workflow started from a Jira issue. Skip this step for standalone local runs.
 
-Use the `jira-nailedit` skill for authentication and API calls.
+Use the `jira-nailedit` skill for authentication and API calls. On cloud agents, run Jira upload/comment scripts inside the **tmux session** where `JIRA_TOKEN` is available — see `jira-nailedit` skill.
 
 **Files to attach** — upload only:
 - `*.txt` — simulation summary (always)
@@ -159,6 +169,43 @@ Then post a comment summarising results — extract Actual RTP and Target Range 
 ---
 
 ## Tips
+
+### Navigating the TUI (Linux / Cloud Agents)
+
+The simulation TUI (Spectre.Console) **requires a large terminal**. A small or `TERM=dumb` shell crashes with:
+
+```
+System.InvalidOperationException: Ratio must be equal to or greater than 1
+```
+
+Run simulations inside **tmux** with explicit size and term type:
+
+```bash
+TMUX=/exec-daemon/tmux
+$TMUX -f /exec-daemon/tmux.portal.conf new-session -d -s sim-run -x 200 -y 50
+$TMUX -f /exec-daemon/tmux.portal.conf send-keys -t sim-run \
+  'export DOTNET_ROOT=$HOME/.dotnet PATH=$PATH:$HOME/.dotnet TERM=xterm-256color; \
+   cd /path/to/src/<GameName>; \
+   dotnet run --no-build -c Release --no-launch-profile -- -c --csv ...' C-m
+```
+
+**Wait for the main menu** (`Configure session` visible) before sending navigation keys. Poll with:
+
+```bash
+$TMUX -f /exec-daemon/tmux.portal.conf capture-pane -t sim-run -p | grep 'Configure session'
+```
+
+**Standard flow (no behaviours):** `1` → Start → wait for COMPLETE
+
+**With behaviours:** `4` → Configure session → `2` → Behaviours → `1` → Activate Behaviours → `Esc` → `Esc` → `1` → Simulation → `1` → Start
+
+> The Behaviours submenu shows **"1 Activate Behaviours"** — press `1`, not `a`. With a single JSON file in `--behavioursPath`, activation enables that strategy automatically.
+
+Send keys **without** `C-m` (Enter) for menu digits — only the initial `dotnet run` command needs Enter.
+
+**Verify simulation started:** pane shows `Games Played` increasing, or `Games Left` decreasing. If keys were sent before the app loaded, bash will report `-bash: 4: command not found` — kill the session and retry.
+
+**Completion:** wait for `COMPLETE` in pane, or `Games Left    0` plus `.txt` file present in `--logPath`.
 
 ### Navigating the TUI (macOS)
 
@@ -178,7 +225,7 @@ Key codes: `18` = 1, `19` = 2, `20` = 3, `21` = 4, `53` = Esc
 
 **Standard flow (no behaviours):** `1` → Simulation → `1` → Start → wait for COMPLETE
 
-**With behaviours:** `4` → Configure Session → `2` → Behaviours → select and activate **one** strategy → Esc → Esc → `1` → Simulation → `1` → Start
+**With behaviours:** `4` → Configure Session → `2` → Behaviours → `1` → Activate Behaviours → Esc → Esc → `1` → Simulation → `1` → Start
 
 If multiple JSON files are in `--behavioursPath`, pick only the strategy for this run — do not activate others.
 
@@ -205,3 +252,19 @@ results/<GameName><Variant>_<strategy>/
 - Path: `gs://bandit-simulation-results/<GameName>/<YYYY-MM-DD_HH-MM-SS>/<GameName><Variant>_<strategy>/`
 
 Use **`gcloud`** MCP for uploads (`gsutil`), **`google-cloud-storage`** MCP for browsing and reading objects.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Framework: Microsoft.NETCore.App, version 6.0.0` not found | Only .NET 8 SDK installed | Install .NET 6.0 runtimes — see `bandit-server` skill |
+| `Ratio must be equal to or greater than 1` | Terminal too small / wrong `TERM` | tmux session `-x 200 -y 50`, `TERM=xterm-256color` |
+| `-bash: 4: command not found` after launch | TUI never started; keys hit bash | Install .NET 6 runtime, wait for menu before sending keys |
+| Jira 404 / empty `$JIRA_TOKEN` in agent shell | Secrets only in tmux session | Run Jira scripts via tmux `send-keys` — see `jira-nailedit` skill |
+| `base64: invalid input` decoding GCP key | Shell `echo` corrupts multiline b64 | `python3 -c "import os,base64; ..."` |
+| No output files in `--logPath` | Directory does not exist | `mkdir -p` before launching simulation |
+| Simulation stuck at menu, `Games Played 0` | Wrong key sequence or Enter sent with menu keys | Use `4` `2` `1` `Esc` `Esc` `1` `1` without Enter between menu items |
+
+### Smoke test vs production run
+
+Use a **small** `--numOfGames` (e.g. 1000) only to verify TUI navigation and runtime setup after fixing environment issues. Ticket/production runs use the count from the Jira description (commonly 250K or 1M). Always confirm the pane shows the expected game count before walking away.
