@@ -109,20 +109,25 @@ Use to generate spin-level data required for game server certification. Same as 
 
 Tool location: `tools/rng-distribution-report/`. Two-step process: CSV → JSON → Excel.
 
-1. Install dependencies (once):
+Use the **Rust binaries** (`rng-report-rs`) — much lower memory usage than the Python scripts.
+
+1. Build the Rust tools (once, requires Rust/Cargo):
    ```bash
-   cd tools/rng-distribution-report
-   pip install -r requirements.txt
+   cd tools/rng-distribution-report-rust
+   cargo build --release
    ```
+   Binaries are placed in `target/release/`.
+
 2. Generate JSON report (1M spins takes a few minutes):
    ```bash
-   python tools/rng-distribution-report/generate_json_report.py \
+   tools/rng-distribution-report-rust/target/release/generate_json_report \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.csv \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.json
    ```
+
 3. Generate Excel report:
    ```bash
-   python tools/rng-distribution-report/generate_excel_report.py \
+   tools/rng-distribution-report-rust/target/release/generate_excel_report \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.json \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.xlsx
    ```
