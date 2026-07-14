@@ -1,0 +1,22 @@
+[package]
+name = "rng-report-rs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "generate_json_report"
+path = "src/generate_json_report.rs"
+
+[[bin]]
+name = "generate_excel_report"
+path = "src/generate_excel_report.rs"
+
+[dependencies]
+rust_xlsxwriter = { version = "0.87", features = ["zlib"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+csv = "1"
+base64 = "0.22"
+flate2 = "1"
+md-5 = "0.10"
