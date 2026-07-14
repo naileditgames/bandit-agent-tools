@@ -153,11 +153,19 @@ Upload all variant/strategy directories from one session under a shared timestam
 
 Use the `jira-nailedit` skill for authentication and API calls.
 
-**Files to attach** — upload only:
+**Create a single zip** containing all result files across all variant/strategy directories, then attach that one zip. Include only:
 - `*.txt` — simulation summary (always)
 - `*.xlsx` — RNG distribution report (when generated)
 
-**Never attach** `*.csv` or `*.json` — too large or intermediate artifacts.
+**Never include** `*.csv` or `*.json` — too large or intermediate artifacts.
+
+```bash
+# Collect eligible files and zip them (run from the results root)
+find tmp/results -name "*.txt" -o -name "*.xlsx" | \
+  zip -j tmp/<GameName>_simulation_results.zip -@
+```
+
+Attach `tmp/<GameName>_simulation_results.zip` as a **single attachment** to the Jira ticket.
 
 Then post a comment summarising results — extract Actual RTP and Target Range from each `.txt` file and present as a table. Introduce yourself briefly at the start of the comment.
 
