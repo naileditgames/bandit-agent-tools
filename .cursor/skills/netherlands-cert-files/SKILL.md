@@ -18,13 +18,14 @@ folder containing only the **result-affecting math source** of one game, plus a
 `description.xlsx` that tells the reader what each file is for. The reader is a
 non-author (an auditor) who needs to find the math fast.
 
-**Output location:** build the deliverable in a **temp dir outside the repo** —
-e.g. `/tmp/<GameName>-nl/NetherlandsFiles` — then write the zip there too
-(e.g. `/tmp/<GameName>-nl/NetherlandsFiles.zip`). The loose files are regenerable
-and are not committed — the zip is the deliverable (to attach to Jira or hand off).
+**Output location:** build the deliverable under `tmp/` in the `bandit-agent-tools`
+repo root — e.g. `tmp/<GameName>-nl/NetherlandsFiles` — then write the zip there too
+(e.g. `tmp/<GameName>-nl/NetherlandsFiles.zip`). The loose files are regenerable
+and are not committed (`tmp/` is gitignored) — the zip is the deliverable (to attach to Jira or hand off).
 
-Building outside the cloned repo avoids the trap where copied source files get
-picked up by the project's build globs and break the build.
+Building inside `bandit-agent-tools/tmp/` keeps all artefacts in one place while
+still being outside the cloned game repo's build system, avoiding the trap where
+copied source files get picked up by the game's build globs.
 
 ## How the work is split
 
@@ -44,7 +45,7 @@ All three read **one manifest you assemble** (the product of your analysis):
 ```json
 {
   "title": "StarsBonanza3x3",
-  "out":   "/tmp/StarsBonanza3x3-nl/NetherlandsFiles",
+  "out":   "tmp/StarsBonanza3x3-nl/NetherlandsFiles",
   "files": [
     {"src": "/abs/.../src/StarsBonanza3x3/Config/V90/GameProperties.json", "note": "Math configuration for V90 RTP variant"},
     {"src": "/abs/.../src/StarsBonanza3x3/Config/V96/GameProperties.json", "note": "Math configuration for V96 RTP variant"},
@@ -167,17 +168,17 @@ For **game-specific feature files** there is no template — read them and compr
 one specific line (e.g. `CollectFeature.cs` → "Wild collect feature logic";
 `HoldAndRespin.cs` → "Hold and respin feature logic").
 
-Write the manifest to a temp path (e.g. `/tmp/<GameName>_manifest.json`), ordering
+Write the manifest to `tmp/<GameName>_manifest.json`, ordering
 files **config variants → entry rounds → spins → feature logic → win-util**.
 
 ### 4. Copy + build + zip (deterministic scripts)
 
 ```bash
 SKILL=.cursor/skills/netherlands-cert-files/scripts
-python3 "$SKILL/copy_files.py"             --manifest /tmp/<GameName>_manifest.json
-python3 "$SKILL/build_description_xlsx.py" --manifest /tmp/<GameName>_manifest.json
-python3 "$SKILL/make_zip.py"               --manifest /tmp/<GameName>_manifest.json \
-    --zip-out "/tmp/<GameName>-nl/NetherlandsFiles.zip"
+python3 "$SKILL/copy_files.py"             --manifest tmp/<GameName>_manifest.json
+python3 "$SKILL/build_description_xlsx.py" --manifest tmp/<GameName>_manifest.json
+python3 "$SKILL/make_zip.py"               --manifest tmp/<GameName>_manifest.json \
+    --zip-out "tmp/<GameName>-nl/NetherlandsFiles.zip"
 ```
 
 Run scripts from the `bandit-agent-tools` repo root so the `SKILL` path resolves.
@@ -190,8 +191,8 @@ basename**, so a typo cannot silently drop a math file. `build_description_xlsx.
 
 ### 5. Verify, then show the summary table
 
-- Confirm the temp `out` folder holds the copied files and `description.xlsx`.
-- Confirm the zip was written at `--zip-out`.
+- Confirm `tmp/<GameName>-nl/NetherlandsFiles/` holds the copied files and `description.xlsx`.
+- Confirm the zip was written at `tmp/<GameName>-nl/NetherlandsFiles.zip`.
 - **Show the user the `File | Note` summary table** (the Markdown table
   `build_description_xlsx.py` printed — relay it verbatim), then state the file count
   and zip path.

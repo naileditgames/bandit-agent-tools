@@ -80,8 +80,8 @@ Apply the **`netherlands-cert-files`** skill with `tmp/<repo>` as the repo root.
 The skill will:
 - Analyse the game source under `tmp/<repo>/src/<GameName>/`
 - Select the result-affecting math files (JSON configs + C# logic)
-- Produce a flat folder + `description.xlsx` in `/tmp/<GameName>-nl/NetherlandsFiles/`
-- Write the zip to `/tmp/<GameName>-nl/NetherlandsFiles.zip`
+- Produce a flat folder + `description.xlsx` in `tmp/<GameName>-nl/NetherlandsFiles/`
+- Write the zip to `tmp/<GameName>-nl/NetherlandsFiles.zip`
 
 ### 4. Post to Jira
 
@@ -98,7 +98,7 @@ source .env
 curl -s -X POST \
   -H "$AUTH_HEADER" \
   -H "X-Atlassian-Token: no-check" \
-  -F "file=@/tmp/<GameName>-nl/NetherlandsFiles.zip;type=application/zip" \
+  -F "file=@$(pwd)/tmp/<GameName>-nl/NetherlandsFiles.zip;type=application/zip" \
   "$BASE/issue/<TICKET>/attachments" \
   | python3 -c "import json,sys; a=json.load(sys.stdin); print('Attached ID:', a[0]['id'])"
 ```
@@ -131,15 +131,15 @@ NetherlandsFiles.zip is attached to this ticket.
 
 - Always use `tmp/` for cloned repos. The cloned repo is only needed during generation —
   it can be removed afterwards.
-- `/tmp/<GameName>-nl/` and its contents (loose files + zip) are regenerable and are
-  not committed anywhere.
+- `tmp/<GameName>-nl/` and its contents (loose files + zip) are regenerable and are
+  not committed (`tmp/` is gitignored).
 - If the game name in the Jira ticket is ambiguous or missing, comment on the ticket
   asking for clarification before proceeding.
 
 ## Expected output per run
 
 ```
-/tmp/<GameName>-nl/
+tmp/<GameName>-nl/
 ├── NetherlandsFiles/
 │   ├── GameProperties.json   (per variant, renamed if needed for uniqueness)
 │   ├── BaseRound.cs
@@ -155,13 +155,14 @@ Rename them in the manifest `src` field by copying them to temp paths first:
 
 ```bash
 # Disambiguate per-variant config files before building the manifest
-cp tmp/<repo>/src/<GameName>/Config/V90/GameProperties.json /tmp/<GameName>-nl/GameProperties-V90.json
-cp tmp/<repo>/src/<GameName>/Config/V96/GameProperties.json /tmp/<GameName>-nl/GameProperties-V96.json
+mkdir -p tmp/<GameName>-nl
+cp tmp/<repo>/src/<GameName>/Config/V90/GameProperties.json tmp/<GameName>-nl/GameProperties-V90.json
+cp tmp/<repo>/src/<GameName>/Config/V96/GameProperties.json tmp/<GameName>-nl/GameProperties-V96.json
 ```
 
-Then reference the renamed temp paths in the manifest `src` fields:
+Then reference the renamed paths in the manifest `src` fields:
 
 ```json
-{"src": "/tmp/<GameName>-nl/GameProperties-V90.json", "note": "Math configuration for V90 RTP variant"},
-{"src": "/tmp/<GameName>-nl/GameProperties-V96.json", "note": "Math configuration for V96 RTP variant"}
+{"src": "tmp/<GameName>-nl/GameProperties-V90.json", "note": "Math configuration for V90 RTP variant"},
+{"src": "tmp/<GameName>-nl/GameProperties-V96.json", "note": "Math configuration for V96 RTP variant"}
 ```

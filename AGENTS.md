@@ -27,9 +27,9 @@ Environment variables (`GG_GITLAB_TOKEN`, `JIRA_TOKEN`, etc.) are available dire
 ## Working directory conventions
 
 - Clone all game repos into `tmp/<repo-name>/` — never elsewhere in the workspace.
-- Write all simulation results and cert build artefacts to `/tmp/<GameName>-*/` (system temp) or `tmp/results/` — never to `src/` or the repo root.
+- Write all simulation results and cert build artefacts to `tmp/<GameName>-*/` or `tmp/results/` — never to `src/` or the repo root.
 - `tmp/` is gitignored. Do not commit anything under it.
-- Artefacts in `/tmp/` (loose files, zips) are regenerable — the zip attached to Jira is the only deliverable that matters.
+- Artefacts in `tmp/` (loose files, zips) are regenerable — the zip attached to Jira is the only deliverable that matters.
 
 ---
 
@@ -55,7 +55,7 @@ The `netherlands-cert-files` skill has the full decision table.
 
 ## `GameProperties.json` filename collisions
 
-Multiple variants each produce a `GameProperties.json`. These collide in the flat `NetherlandsFiles/` output folder. Always copy them to disambiguated temp paths (`GameProperties-V90.json`, etc.) before building the manifest — `copy_files.py` aborts on basename collisions.
+Multiple variants each produce a `GameProperties.json`. These collide in the flat `NetherlandsFiles/` output folder. Always copy them to disambiguated paths under `tmp/<GameName>-nl/` (`GameProperties-V90.json`, etc.) before building the manifest — `copy_files.py` aborts on basename collisions.
 
 ---
 
