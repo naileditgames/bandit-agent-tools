@@ -2,10 +2,10 @@
 name: netherlands-cert-files
 description: >-
   Build the Netherlands certification "Files" deliverable for a GamesGlobal Bandit
-  slot-game repo: collect the result-affecting math source (JSON variant configs + C#
-  game logic) of one game into a flat folder and write a description.xlsx listing every
-  file with a short, content-based note. Use whenever the user wants to prepare a
-  Netherlands certification / regulator / testing-lab package for a Bandit game,
+  slot-game repo: collect the result-affecting C# math source of one game into a flat
+  folder and write a description.xlsx listing every file with a short, content-based
+  note. Use whenever the user wants to prepare a Netherlands certification / regulator /
+  testing-lab package for a Bandit game,
   "export the math files", "make the NetherlandsFiles folder", "do the cert files for
   StarsBonanza3x3", or asks for the same files-plus-Excel bundle — works for any Bandit
   game shape (lines, ways, hold, bonus-buy, free spins).
@@ -47,10 +47,8 @@ All three read **one manifest you assemble** (the product of your analysis):
   "title": "StarsBonanza3x3",
   "out":   "tmp/StarsBonanza3x3-nl/NetherlandsFiles",
   "files": [
-    {"src": "/abs/.../src/StarsBonanza3x3/Config/V90/GameProperties.json", "note": "Math configuration for V90 RTP variant"},
-    {"src": "/abs/.../src/StarsBonanza3x3/Config/V96/GameProperties.json", "note": "Math configuration for V96 RTP variant"},
-    {"src": "/abs/.../src/StarsBonanza3x3/Game/BaseRound.cs",              "note": "Base round entry point"},
-    {"src": "/abs/.../src/StarsBonanza3x3/Game/BaseSpin.cs",               "note": "Base spin logic"}
+    {"src": "/abs/.../src/StarsBonanza3x3/Game/BaseRound.cs", "note": "Base round entry point"},
+    {"src": "/abs/.../src/StarsBonanza3x3/Game/BaseSpin.cs",  "note": "Base spin logic"}
   ]
 }
 ```
@@ -88,10 +86,10 @@ src/
 └── <GameName>/
     ├── Config/
     │   ├── V90/
-    │   │   ├── GameProperties.json   ← math config (reels, paytable, bets, features)
-    │   │   ├── Install.xml           ← deployment config — EXCLUDE
-    │   │   ├── EmptyReels.xml        ← client display only — EXCLUDE
-    │   │   └── SkinMapping.xml       ← client display only — EXCLUDE
+    │   │   ├── GameProperties.json   ← EXCLUDE
+    │   │   ├── Install.xml           ← EXCLUDE
+    │   │   ├── EmptyReels.xml        ← EXCLUDE
+    │   │   └── SkinMapping.xml       ← EXCLUDE
     │   ├── V92/ ... V94/ ... V96/   (same layout per variant)
     ├── Game/                         ← core game logic C# files
     ├── Features/                     ← feature-specific C# files (free spins, bonus, etc.)
@@ -103,13 +101,13 @@ src/
 
 | Source | Which files |
 |--------|-------------|
-| `Config/V<XX>/GameProperties.json` | One per RTP variant that exists (V90, V92, V94, V96). This is the primary math config: reel strips, paytable weights, bet sizes, feature trigger probabilities, RTP target. Include **all variants present**. |
 | `Game/**/*.cs` | Every `.cs` that computes rounds, spins, feature triggers, or wins. Read each file — include if result-affecting. Typical examples: `BaseRound.cs`, `BaseSpin.cs`, `FreeSpin.cs`, `BonusRound.cs`, `WinCalculator.cs`, `Helpers.cs`. |
 | `Features/**/*.cs` | Feature-specific logic (free spins, collect, bonus game, hold, respin, etc.). Same rule — read the file and include only if result-affecting. |
 | SDK win-util | Any SDK or shared utility the game calls for win calculations. Detect with `grep -rlE 'LinesUtils\|WaysUtils\|WinUtils' src/<GameName>/` and include the referenced file if found under `SDK/`. |
 
 **Exclude (never):**
 
+- `Config/V<XX>/GameProperties.json` — math config is not required for the Netherlands package.
 - `Config/V<XX>/Install.xml` — module ID and deployment metadata, not math.
 - `Config/V<XX>/EmptyReels.xml` — initial visual reel state for the client, not math.
 - `Config/V<XX>/SkinMapping.xml` — client skin configuration, not math.
@@ -142,17 +140,6 @@ For every file you include, **read it** and write one short, content-based note 
 *what it does for the math* — not how the code is written. A generic note for a file
 you did not open is a defect.
 
-**Config notes:**
-
-| File | Note |
-|------|------|
-| `GameProperties.json` (V90) | `Math configuration for V90 RTP variant` |
-| `GameProperties.json` (V92) | `Math configuration for V92 RTP variant` |
-| `GameProperties.json` (V94) | `Math configuration for V94 RTP variant` |
-| `GameProperties.json` (V96) | `Math configuration for V96 RTP variant` |
-
-When only two variants exist (e.g. V92 and V96), use the variant number exactly.
-
 **Logic / win-util notes (templates — read the file to confirm):**
 
 | File | Note |
@@ -168,16 +155,16 @@ For **game-specific feature files** there is no template — read them and compr
 one specific line (e.g. `CollectFeature.cs` → "Wild collect feature logic";
 `HoldAndRespin.cs` → "Hold and respin feature logic").
 
-Write the manifest to `tmp/<GameName>_manifest.json`, ordering
-files **config variants → entry rounds → spins → feature logic → win-util**.
+Write the manifest to `tmp/<GameName>-nl/manifest.json`, ordering
+files **entry rounds → spins → feature logic → win-util**.
 
 ### 4. Copy + build + zip (deterministic scripts)
 
 ```bash
 SKILL=.cursor/skills/netherlands-cert-files/scripts
-python3 "$SKILL/copy_files.py"             --manifest tmp/<GameName>_manifest.json
-python3 "$SKILL/build_description_xlsx.py" --manifest tmp/<GameName>_manifest.json
-python3 "$SKILL/make_zip.py"               --manifest tmp/<GameName>_manifest.json \
+python3 "$SKILL/copy_files.py"             --manifest tmp/<GameName>-nl/manifest.json
+python3 "$SKILL/build_description_xlsx.py" --manifest tmp/<GameName>-nl/manifest.json
+python3 "$SKILL/make_zip.py"               --manifest tmp/<GameName>-nl/manifest.json \
     --zip-out "tmp/<GameName>-nl/NetherlandsFiles.zip"
 ```
 

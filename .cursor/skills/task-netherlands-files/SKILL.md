@@ -2,10 +2,10 @@
 name: task-netherlands-files
 description: >-
   Clone a Bandit game repo, generate the Netherlands certification Files package
-  (GameProperties JSON configs + C# math source + description.xlsx), zip the result,
-  and attach to Jira. Use when asked to do the Netherlands cert files task, prepare a
-  NL certification package for a game, process a Jira ticket requesting Netherlands
-  certification files, or generate and deliver the NetherlandsFiles.zip.
+  (C# math source + description.xlsx), zip the result, and attach to Jira. Use when
+  asked to do the Netherlands cert files task, prepare a NL certification package for a
+  game, process a Jira ticket requesting Netherlands certification files, or generate
+  and deliver the NetherlandsFiles.zip.
 ---
 
 # Netherlands Files Task
@@ -79,7 +79,7 @@ Apply the **`netherlands-cert-files`** skill with `tmp/<repo>` as the repo root.
 
 The skill will:
 - Analyse the game source under `tmp/<repo>/src/<GameName>/`
-- Select the result-affecting math files (JSON configs + C# logic)
+- Select the result-affecting math files (C# logic only — no GameProperties.json)
 - Produce a flat folder + `description.xlsx` in `tmp/<GameName>-nl/NetherlandsFiles/`
 - Write the zip to `tmp/<GameName>-nl/NetherlandsFiles.zip`
 
@@ -114,11 +114,9 @@ Example comment structure (use Atlassian Document Format):
 Netherlands certification Files package generated for <GameName>.
 
 Files included: <N>
-Variants: V90, V92, V94, V96
 
 | File | Note |
 |------|------|
-| GameProperties.json (V96) | Math configuration for V96 RTP variant |
 | BaseRound.cs | Base round entry point |
 ...
 
@@ -140,29 +138,11 @@ NetherlandsFiles.zip is attached to this ticket.
 
 ```
 tmp/<GameName>-nl/
+├── manifest.json             build manifest
 ├── NetherlandsFiles/
-│   ├── GameProperties.json   (per variant, renamed if needed for uniqueness)
 │   ├── BaseRound.cs
 │   ├── BaseSpin.cs
 │   ├── ...
 │   └── description.xlsx
 └── NetherlandsFiles.zip      ← deliverable attached to Jira
-```
-
-**Note on filename collisions:** `copy_files.py` aborts on basename collisions. If
-multiple variants have a `GameProperties.json`, they will collide in the flat folder.
-Rename them in the manifest `src` field by copying them to temp paths first:
-
-```bash
-# Disambiguate per-variant config files before building the manifest
-mkdir -p tmp/<GameName>-nl
-cp tmp/<repo>/src/<GameName>/Config/V90/GameProperties.json tmp/<GameName>-nl/GameProperties-V90.json
-cp tmp/<repo>/src/<GameName>/Config/V96/GameProperties.json tmp/<GameName>-nl/GameProperties-V96.json
-```
-
-Then reference the renamed paths in the manifest `src` fields:
-
-```json
-{"src": "tmp/<GameName>-nl/GameProperties-V90.json", "note": "Math configuration for V90 RTP variant"},
-{"src": "tmp/<GameName>-nl/GameProperties-V96.json", "note": "Math configuration for V96 RTP variant"}
 ```

@@ -39,25 +39,32 @@ def copy_to_clipboard(path):
       - Windows : PowerShell Set-Clipboard -Path — pastes the file in Explorer/Outlook.
       - Linux   : wl-copy / xclip with the GNOME file-copy target (Nautilus/Nemo/Caja);
                   desktop-specific and needs those tools — may not work on KDE/others.
+                  Skipped automatically on headless machines (no DISPLAY/WAYLAND_DISPLAY).
     """
     plat = sys.platform
     try:
         if plat == "darwin":
             esc = path.replace("\\", "\\\\").replace('"', '\\"')
             subprocess.run(["osascript", "-e", f'set the clipboard to POSIX file "{esc}"'],
-                           check=True, capture_output=True, text=True)
+                           check=True, capture_output=True, text=True, timeout=5)
             print("  Copied the zip to the clipboard — paste (Cmd+V) to attach/move it")
             return
         if plat == "win32" or plat == "cygwin":
             ps = "Set-Clipboard -Path '{}'".format(path.replace("'", "''"))
             subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                           check=True, capture_output=True, text=True)
+                           check=True, capture_output=True, text=True, timeout=5)
             print("  Copied the zip to the clipboard — paste (Ctrl+V) to attach/move it")
             return
-        if plat.startswith("linux") and _linux_copy_file(path):
-            print("  Copied the zip to the clipboard — paste (Ctrl+V) in your file manager")
-            return
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        if plat.startswith("linux"):
+            # Skip entirely on headless machines — wl-copy/xclip block without a display.
+            has_display = os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+            if not has_display:
+                print(f"  (headless Linux — clipboard skipped; zip is at: {path})")
+                return
+            if _linux_copy_file(path):
+                print("  Copied the zip to the clipboard — paste (Ctrl+V) in your file manager")
+                return
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
         detail = (getattr(e, "stderr", "") or str(e)).strip()
         print(f"  (clipboard copy failed — the zip is still written: {detail})")
         return
@@ -71,11 +78,11 @@ def _linux_copy_file(path):
     mime = "x-special/gnome-copied-files"
     if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-copy"):
         subprocess.run(["wl-copy", "--type", mime], input=payload, text=True,
-                       check=True, capture_output=True)
+                       check=True, capture_output=True, timeout=5)
         return True
     if shutil.which("xclip"):
         subprocess.run(["xclip", "-selection", "clipboard", "-t", mime],
-                       input=payload, text=True, check=True, capture_output=True)
+                       input=payload, text=True, check=True, capture_output=True, timeout=5)
         return True
     return False
 
