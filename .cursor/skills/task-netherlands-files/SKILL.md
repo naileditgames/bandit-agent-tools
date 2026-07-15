@@ -105,19 +105,36 @@ curl -s -X POST \
 
 **4b. Post a summary comment:**
 
-Include a brief introduction, then relay the `File | Note` summary table printed by
-`build_description_xlsx.py` in step 3.
+The comment must contain three sections:
+
+1. A brief introduction line.
+2. **Included files** — relay the `File | Note` table printed by `build_description_xlsx.py`.
+3. **Excluded files** — list every `.cs` file found in the game's `Game/` folder that
+   was **not** included in the zip, with a short reason for each exclusion. Produce this
+   list by diffing the files you analysed against the manifest. Typical reasons: "pure
+   state container / no logic", "launcher / entry-point boilerplate", "test helper",
+   "serializer only".
 
 Example comment structure (use Atlassian Document Format):
 
 ```
 Netherlands certification Files package generated for <GameName>.
 
-Files included: <N>
+*Included files (<N>):*
 
 | File | Note |
 |------|------|
 | BaseRound.cs | Base round entry point |
+| BaseSpin.cs  | Base spin logic        |
+...
+
+*Excluded from Game/ (<M> files):*
+
+| File | Reason |
+|------|--------|
+| GameRound.cs   | Pure state container — no result-affecting logic |
+| SpinResult.cs  | DTO, persists state only |
+| Program.cs     | Launcher / entry-point boilerplate |
 ...
 
 NetherlandsFiles.zip is attached to this ticket.
