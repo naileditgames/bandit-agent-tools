@@ -15,6 +15,7 @@ description: Interact with the NaileditGames Jira instance — read issues, post
   - [Download attachment](#download-attachment)
   - [Upload attachment](#upload-attachment)
   - [Post comment (Atlassian Document Format)](#post-comment-atlassian-document-format)
+- [Cloud agents — credentials in tmux](#cloud-agents--credentials-in-tmux)
 - [Gotchas](#gotchas)
 
 ---
@@ -64,10 +65,10 @@ curl -H "Authorization: Bearer $JIRA_TOKEN" \
 
 Token format: `ATSTT3x...`
 
-Always detect the token type from `.env` and pick the right auth mode:
+Always detect the token type and pick the right auth mode. Prefer `$JIRA_TOKEN` from the environment; fall back to `.env` only for local dev:
 
 ```bash
-JIRA_TOKEN=$(grep '^JIRA_TOKEN=' .env | cut -d= -f2-)
+JIRA_TOKEN="${JIRA_TOKEN:-$(grep '^JIRA_TOKEN=' .env 2>/dev/null | cut -d= -f2-)}"
 if [[ "$JIRA_TOKEN" == ATSTT* ]]; then
   # service account — Bearer on api.atlassian.com
   CLOUD_ID=$(curl -s https://naileditgames.atlassian.net/_edge/tenant_info | python3 -c "import json,sys; print(json.load(sys.stdin)['cloudId'])")
@@ -136,6 +137,41 @@ print(json.dumps({'body': body}))
   -d @- \
   "$BASE/issue/NKIT-123/comment" \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print('Comment ID:', d.get('id'))"
+```
+
+---
+
+## Cloud agents — credentials in tmux
+
+On Cursor Cloud Agents, `JIRA_TOKEN` / `JIRA_EMAIL` are injected as secrets but may appear **empty in the agent's non-interactive shell** (`echo $JIRA_TOKEN` → blank). They are available in the **user's interactive tmux session** (the terminal the user sees).
+
+**Symptom:** Jira API returns `Issue does not exist or you do not have permission` (404) when credentials look unset.
+
+**Fix:** Run Jira curl/scripts inside the existing tmux session:
+
+```bash
+TMUX=/exec-daemon/tmux
+$TMUX -f /exec-daemon/tmux.portal.conf send-keys -t <session>:0.0 'bash /path/to/jira_script.sh' C-m
+```
+
+Or verify credentials first:
+
+```bash
+$TMUX -f /exec-daemon/tmux.portal.conf send-keys -t <session>:0.0 'echo ${#JIRA_TOKEN}' C-m
+```
+
+Reusable auth helper (source before any Jira call):
+
+```bash
+# tmp/jira_auth.sh
+if [[ "${JIRA_TOKEN:-}" == ATSTT* ]]; then
+  CLOUD_ID=$(curl -s https://naileditgames.atlassian.net/_edge/tenant_info | python3 -c "import json,sys; print(json.load(sys.stdin)['cloudId'])")
+  export JIRA_BASE="https://api.atlassian.com/ex/jira/${CLOUD_ID}/rest/api/3"
+  export JIRA_AUTH_HEADER="Authorization: Bearer ${JIRA_TOKEN}"
+else
+  export JIRA_BASE="https://naileditgames.atlassian.net/rest/api/3"
+  export JIRA_AUTH_HEADER="Authorization: Basic $(echo -n "${JIRA_EMAIL}:${JIRA_TOKEN}" | base64)"
+fi
 ```
 
 ---

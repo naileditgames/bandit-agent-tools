@@ -12,7 +12,8 @@ description: Setup and build GamesGlobal Bandit slot game server repositories â€
   - [1. Create Directory.Build.props](#1-create-directorybuildprops)
   - [2. Configure NuGet credentials](#2-configure-nuget-credentials)
   - [3. Fix RNG for macOS/Linux](#3-fix-rng-for-macoslinux)
-  - [4. Build](#4-build)
+  - [4. Install .NET 6 runtime](#4-install-net-6-runtime)
+  - [5. Build](#5-build)
 - [Simulations](#simulations)
   - [Simulation Parameters](#simulation-parameters)
   - [Behaviours](#behaviours)
@@ -117,7 +118,28 @@ Add the FakeRng package to `<GameName>.csproj` (same version as other CasinoServ
 <PackageReference Include="CasinoServices.Library.HttpGames.FakeRng" Version="5.4.3.8"/>
 ```
 
-### 4. Build
+### 4. Install .NET 6 runtime
+
+Bandit game servers target **`net6.0`**. Installing only the .NET 8 SDK is not enough â€” `dotnet run` will fail with:
+
+```
+Framework: 'Microsoft.NETCore.App', version '6.0.0' (x64)
+Framework: 'Microsoft.AspNetCore.App', version '6.0.0' (x64)
+```
+
+Install **both** the core and ASP.NET Core 6.0 runtimes (SDK 8 is fine for building):
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+bash /tmp/dotnet-install.sh --channel 6.0 --runtime dotnet
+bash /tmp/dotnet-install.sh --channel 6.0 --runtime aspnetcore
+
+export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}"
+export PATH="$PATH:$DOTNET_ROOT"
+dotnet --list-runtimes   # must show 6.0.x for both Microsoft.NETCore.App and Microsoft.AspNetCore.App
+```
+
+### 5. Build
 
 ```bash
 cd src
