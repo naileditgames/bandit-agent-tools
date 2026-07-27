@@ -38,7 +38,7 @@ The following parameters are required before starting:
 - [ ] Screenshots folder structure created
 - [ ] All operator/currency links verified with screenshots
 - [ ] Results table posted as Jira comment
-- [ ] Screenshots zipped and attached to Jira ticket
+- [ ] Screenshots zip + links.json attached to Jira ticket
 ```
 
 **Reference:** For operator IDs, server IDs, currencies, and preset details — see the [`golden-standard-bet-settings`](./../golden-standard-bet-settings/SKILL.md) skill.
@@ -71,7 +71,7 @@ Use the `golden-bet-scripts` tool to generate links for all operators:
 
 ```bash
 cd tools/golden-bet-scripts
-.venv/bin/python main.py \
+python3 main.py \
   --axiom-name <axiom_name> \
   --api-key <api_key> \
   --game-name <game_name> \
@@ -79,9 +79,13 @@ cd tools/golden-bet-scripts
   --output tmp/gsbs_test_<game_name>/links.json
 ```
 
-Use a unique random username (e.g. `user883738`) each run — tokens are single-use and re-running with the same username will fail with 404.
+Use a unique random username (e.g. `user883738`) each run — using the same base username for a second run will produce conflicting tokens.
 
 Store output in `tmp/gsbs_test_<game_name>/` (the `tmp/` folder in this repo, not `/tmp`).
+
+> **Token lifetime:** Each token is created with `numLaunchTokens: 10`, meaning it can be used for up to **10 game launches**, not just one. If verification of a link fails, you can retry using the **same link from `links.json`** without regenerating. Only generate new links if the original run's `links.json` is lost or if tokens have been exhausted.
+
+> **Operator name vs lobby name:** The launch URL uses the `operatorNameLink` field, not `operatorName`. These may differ (e.g. operator `50KMaxExposure` uses lobby name `50KMEQuickfire` in the URL). **Always use the link directly from `links.json`** — never reconstruct it from the operator name.
 
 ### 2. Calculate MaxBet values for exposure-based operators
 
@@ -107,9 +111,10 @@ One subfolder per operator ID. For each link in `links.json`:
 
 1. Open the link in the browser.
 2. Open the game's bet selection menu.
-3. Verify **DefaultBet** — confirm it matches the expected value for the operator/currency.
-4. Verify **MaxBet** — the highest available bet in the menu **must not exceed** the calculated MaxBet for that exposure/currency.
-5. Take a screenshot and save it to `screenshots/<operatorId>/<currency>.png`.
+3. Identify **DefaultBet** — the bet highlighted in blue (selected) when the panel first opens is the game's configured default. Do **not** use the minimum value in the ladder as the default.
+4. Identify **MaxBet** — the highest available bet button in the menu. Read it from the screenshot visually; see [Extracting bet values reliably](#extracting-bet-values-reliably) below for automation guidance.
+5. Verify MaxBet does not exceed the calculated limit for that operator/currency.
+6. Take a screenshot and save it to `screenshots/<operatorId>/<currency>.png`.
 
 **Outcome rules:**
 
@@ -121,7 +126,7 @@ One subfolder per operator ID. For each link in `links.json`:
 
 ### 4. Post results to Jira and attach screenshots
 
-Once all operators and currencies have been verified, post a summary comment to the Jira ticket and attach the screenshots.
+Once all operators and currencies have been verified, post a summary comment to the Jira ticket and attach the screenshots and links file.
 
 #### 4a. Post results table
 
@@ -139,30 +144,30 @@ Tested game: <game_name> on <axiom_name>
 
 Use ✅ OK, ⚠️ WARNING, or ❌ FAIL in the Result column. Add a short summary line at the top of the comment, e.g.:
 
-> ✅ All 68 operator/currency combinations passed.
+> ✅ All 72 operator/currency combinations passed.
 
 or
 
 > ❌ 2 failures and 1 warning detected — see table below.
 
-#### 4b. Zip and attach screenshots
+#### 4b. Zip and attach screenshots + links
 
-Zip the entire screenshots folder and attach it to the Jira ticket:
+Zip the entire screenshots folder and attach it to the Jira ticket, and also attach `links.json`:
 
 ```bash
 cd tmp/gsbs_test_<game_name>
 zip -r screenshots_<game_name>.zip screenshots/
 ```
 
-Then use the `jira-nailedit` skill to upload `screenshots_<game_name>.zip` as an attachment to the ticket.
+Then use the `jira-nailedit` skill to upload both `screenshots_<game_name>.zip` and `links.json` as attachments to the ticket.
 
 ---
 
 ## Notes
 
-### Navigating the game with Chrome DevTools MCP
+### Navigating the game with Playwright
 
-Bandit games render on an HTML5 canvas with an HTML overlay (HUD) on top. Canvas elements are not in the accessibility tree, but the HUD buttons are.
+Bandit games render on an HTML5 canvas with an HTML overlay (HUD) on top. Canvas elements are not in the accessibility tree, but the HUD buttons are. Use Playwright (headless Chromium) to automate navigation.
 
 #### Dismiss the intro screen
 
@@ -182,7 +187,7 @@ The bet button is an HTML element with `id="bet_button"`. Dispatch a `pointerup`
 document.getElementById('bet_button').dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
 ```
 
-Wait ~1 second after dispatching before taking the screenshot.
+Wait ~1.5 seconds after dispatching before reading values or taking the screenshot.
 
 #### Close the bet panel
 
@@ -202,3 +207,105 @@ for (const svg of svgs) {
 #### Why `.click()` does not work
 
 The HUD uses React with `pointerup`-based handlers. Standard `.click()` and manually dispatched `click`/`mousedown`/`mouseup` events are ignored because the game checks `event.isTrusted` for those event types. The `pointerup` handler does not perform this check, making it the reliable automation path.
+
+---
+
+### Extracting bet values reliably
+
+> **IMPORTANT:** Automated DOM text extraction is unreliable for bet values. Visual inspection of screenshots is the ground truth. Use the extraction approach below only as a starting point; always confirm suspicious results from the screenshot.
+
+#### The balance false-positive problem
+
+The player balance is displayed in the bottom HUD (left side of screen). A generic text-walker will capture it alongside bet values, making it appear as an extra bet option. Example: the balance "£250.00" gets captured as `250`, causing a false FAIL for any operator whose MaxBet cap is below £250.
+
+**Rule:** The bet panel is rendered on the **right half of the screen** (x > 600 px at 1280×720). Only read elements positioned in that region.
+
+#### Locale-specific number formatting
+
+Different currency locales use different decimal and thousands separators, which breaks naive regex parsing:
+
+| Currency | Display example | Parsing issue |
+|---|---|---|
+| GBP/USD | `2.00` | No issue |
+| EUR (DE/GR) | `0,20` (comma = decimal) | `replace(',','')` → `020` → 20 ❌ |
+| CLP | `1 000,00` (space = thousands, comma = decimal) | Space splits the number; only "1" is captured ❌ |
+| ZMW/JPY | `1,000.00` or `1000` | Usually no issue |
+
+**Correct parsing approach:** Strip spaces, then replace the last comma (if followed by exactly 2 digits at end) with a dot for decimal, remove remaining commas/dots used as thousands separators. Or, more simply, read the `innerText` of each bet button element directly and parse `parseFloat(text.replace(/\s/g,'').replace(',','.'))`.
+
+#### Reliable bet value extraction snippet
+
+```javascript
+() => {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+  const values = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent) continue;
+    const rect = parent.getBoundingClientRect();
+    // Only the bet panel on the right half of the screen
+    if (!rect || rect.x < 600 || rect.width < 20 || rect.height < 20) continue;
+    // Normalise locale separators: strip spaces, replace comma-decimal
+    const raw = node.textContent.trim().replace(/\s/g, '');
+    const normalised = raw.replace(',', '.');
+    const num = parseFloat(normalised);
+    if (!isNaN(num) && num >= 0.01 && num <= 500000) {
+      values.push(num);
+    }
+  }
+  values.sort((a, b) => a - b);
+  const unique = [...new Set(values)];
+  return { values: unique, max: unique.length > 0 ? unique[unique.length - 1] : null };
+}
+```
+
+#### Identifying DefaultBet from the screenshot
+
+The bet that is **highlighted in blue** when the panel first opens is the game's configured DefaultBet. The extraction script's minimum-value heuristic is wrong — do not use it. Read the DefaultBet from the screenshot (bottom HUD shows `BET (£) X.XX`) or from the highlighted button.
+
+#### Scrollable bet panels (high-multiplier currencies)
+
+For CLP and other high-multiplier currencies the bet panel may extend beyond the visible area. If the extracted `max` seems low, check whether the panel is scrollable — look at the screenshot for a scroll indicator or truncated list. The DOM extraction will miss values that are off-screen but present in the DOM only when scrolled into view.
+
+---
+
+### Handling verification failures
+
+#### "Login failed." in-game error
+
+The game loads but shows "Login failed." inside the canvas. Causes:
+- **Token already used up** (unlikely with `numLaunchTokens: 10`, but possible after many retries).
+- **Web.config default currency mismatch**: the token was created when a different currency was active in Web.config, so the FakeAPI session is inconsistent. Wait for the Web.config to be restored and retry with the same link.
+- **Session expired**: the token is still valid but the session timed out on the server. Retry by navigating to the link again in a fresh browser context.
+
+> Always retry with the **same link** (same token) before generating new links — tokens have 10 uses.
+
+#### HTTP 406 "Missing information" error
+
+The game launch URL returns a raw 406 JSON error page (not the game). This means the FakeAPI could not find the game configuration for the requested operator/currency combination. Causes:
+- The Web.config was set to a different currency than the one the user account was created for.
+- The operator lobby is not configured for that currency on this Axiom environment.
+
+To distinguish these: if other operators load fine for the same currency, the operator lobby is likely not configured. If all operators for that currency fail, the Web.config is probably wrong.
+
+> For operators that fail with 406 for certain currencies: note them as ⚠️ WARNING (not configured on environment) and report to the ticket owner.
+
+#### Web.config management
+
+The `golden-bet-scripts` tool manages Web.config automatically during link generation. The correct endpoints are:
+
+```
+# Fetch Web.config
+GET https://axiomcore-app1-{axiom_name}.installprogram.eu/Manage/Content/FileContent
+    ?filePath=M%3A%5CMGS_IISWebSites%5CCasino%5CSGIFakeAPI%5CWeb.config
+    Header: x-api-key: <api_key>
+
+# Upload Web.config
+PATCH https://axiomcore-app1-{axiom_name}.installprogram.eu/Manage/Content/FileContent
+    Header: x-api-key: <api_key>
+```
+
+Do **not** use `api5-rhel1-{axiom}.installprogram.eu/casino/admin/v1/webconfig` — that endpoint does not exist.
+
+If multiple partial runs have left the Web.config in an unknown state, restore it to GBP before starting a new run.
