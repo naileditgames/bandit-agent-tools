@@ -93,11 +93,34 @@ The game depends on private NuGet packages hosted on GamesGlobal GitLab. Create 
 </configuration>
 ```
 
-Use credentials from `.env` (`GG_GITLAB_USERNAME`, `GG_GITLAB_TOKEN`).
+> **Linux credential expansion:** `${GG_GITLAB_USERNAME}` / `${GG_GITLAB_TOKEN}` style placeholders do **not** expand on Linux when NuGet reads the file. Write the actual values using a heredoc so the shell substitutes them at file-creation time:
+> ```bash
+> cat > src/nuget.config << EOF
+> ... <add key="Username" value="${GG_GITLAB_USERNAME}" /> ...
+> EOF
+> ```
+> Using single quotes (`<< 'EOF'`) will leave the placeholders unexpanded and cause NU1301 restore failures.
+
+### `Directory.Build.props` template
+
+Most Bandit repos ship a `src/Directory.Build.props.temp` with the correct `GameVariant` and `GameMid` already filled in. Copy it rather than writing from scratch:
+
+```bash
+cp src/Directory.Build.props.temp src/Directory.Build.props
+```
 
 ### 3. Fix RNG for macOS/Linux
 
 The default `rng.config.json` uses `MGS.Random.Pool.dll` which depends on Windows API (`QueryPerformanceCounter`) and crashes on macOS/Linux. Skip this step on Windows.
+
+> **Linux runtime note:** Bandit games target `net6.0` and require **both** the base runtime and the ASP.NET Core runtime. Install both with `dotnet-install.sh` — `--runtime dotnet` alone is not enough:
+> ```bash
+> /tmp/dotnet-install.sh --channel 6.0 --install-dir $HOME/.dotnet --runtime dotnet
+> /tmp/dotnet-install.sh --channel 6.0 --install-dir $HOME/.dotnet --runtime aspnetcore
+> export DOTNET_ROOT=$HOME/.dotnet
+> export PATH=$PATH:$HOME/.dotnet
+> ```
+> If you see `Framework: 'Microsoft.AspNetCore.App', version '6.0.0' … not found`, the aspnetcore runtime is missing.
 
 Edit `src/<GameName>/rng.config.json`:
 

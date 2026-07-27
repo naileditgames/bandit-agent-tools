@@ -111,6 +111,18 @@ Tool location: `tools/rng-distribution-report/`. Two-step process: CSV → JSON 
 
 Use the **Rust binaries** (`rng-report-rs`) — much lower memory usage than the Python scripts.
 
+> **Exit the TUI before generating reports.** Each idle simulation TUI holds ~1.5 GB of .NET memory. After a simulation reaches `COMPLETE`, press `E` to exit before running the report tools — or kill completed tmux sessions explicitly:
+> ```bash
+> tmux kill-session -t <session-name>
+> ```
+> Leaving multiple completed TUI sessions running can exhaust RAM when `generate_excel_report` processes large JSON files (see Memory note below).
+
+> **Rust toolchain version.** The tool requires Rust 1.85+ (edition 2024). If `cargo build` fails with `feature 'edition2024' is required`, update the active toolchain:
+> ```bash
+> rustup update stable
+> rustup default stable
+> ```
+
 1. Build the Rust tools (once, requires Rust/Cargo):
    ```bash
    cd tools/rng-distribution-report-rust
@@ -131,6 +143,8 @@ Use the **Rust binaries** (`rng-report-rs`) — much lower memory usage than the
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.json \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.xlsx
    ```
+
+> **Memory note for `generate_excel_report`.** The tool reads the JSON file twice (two-pass design), keeping only one section in memory at a time. Peak RSS is roughly 5× the JSON file size. For a 1.9 GB JSON this is ~9–10 GB; on a 16 GB machine ensure all completed simulation processes are exited first. If the process is OOM-killed (exit code 137), free memory by killing idle tmux sessions and retry.
 
 ## Process: GCP Upload
 
@@ -173,9 +187,25 @@ Then post a comment summarising results — extract Actual RTP and Target Range 
 
 ## Tips
 
-### Navigating the TUI (macOS)
+### Navigating the TUI
 
-The simulation app is an interactive TUI. Use AppleScript `key code` to navigate:
+The simulation app is an interactive TUI. Send keys via tmux:
+
+```bash
+tmux send-keys -t "<session>:0.0" "1" ""   # send the character 1
+tmux send-keys -t "<session>:0.0" Escape "" # send Escape
+tmux capture-pane -t "<session>:0.0" -p     # read current screen
+```
+
+**Standard flow (no behaviours):** `1` → Simulation → `1` → Start → wait for COMPLETE → `E` → Exit
+
+**With behaviours:** `4` → Configure Session → `2` → Behaviours → `1` → Activate → Esc → Esc → `1` → Simulation → `1` → Start → wait for COMPLETE → `E` → Exit
+
+> Always press `E` to exit after COMPLETE — idle TUI processes hold ~1.5 GB each.
+
+If multiple JSON files are in `--behavioursPath`, pick only the strategy for this run — do not activate others.
+
+**macOS only:** AppleScript `key code` can also be used instead of tmux send-keys:
 
 ```bash
 osascript << 'EOF'
@@ -188,14 +218,6 @@ EOF
 ```
 
 Key codes: `18` = 1, `19` = 2, `20` = 3, `21` = 4, `53` = Esc
-
-**Standard flow (no behaviours):** `1` → Simulation → `1` → Start → wait for COMPLETE
-
-**With behaviours:** `4` → Configure Session → `2` → Behaviours → select and activate **one** strategy → Esc → Esc → `1` → Simulation → `1` → Start
-
-If multiple JSON files are in `--behavioursPath`, pick only the strategy for this run — do not activate others.
-
-Read terminal state: `osascript -e 'tell application "Terminal" to get contents of window 1'`
 
 ### Output directories
 
