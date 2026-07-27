@@ -78,7 +78,6 @@ Each key is the operator ID. Each `currencyLinks` entry is a ready-to-open brows
 | `operators.py` | `OPERATOR_DATA_SET` — all GSBS operators with their IDs, server IDs, and supported currencies |
 | `web_config.py` | Fetch, modify (`defaultcurrency`), and upload `Web.config` via Axiom API |
 | `create_user.py` | Create a temporary user session and return an external launch token |
-| `verify_gsbs.py` | (Utility) Calls the `play/refreshes` API to read actual bet limits for each link |
 | `requirements.txt` | Python dependencies |
 
 ## Adding or updating operators
