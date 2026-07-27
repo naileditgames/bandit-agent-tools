@@ -13,6 +13,7 @@ description: >-
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
+- [Environment setup](#environment-setup)
 - [Task Progress](#task-progress)
 - [Steps](#steps)
   - [1. Read parameters from Jira](#1-read-parameters-from-jira-if-triggered-from-jira)
@@ -24,13 +25,13 @@ description: >-
     - [4c. Open the bet panel and extract values](#4c-open-the-bet-panel-and-extract-values)
     - [4d. Record and verify the values](#4d-record-and-verify-the-values)
     - [4e. Take a screenshot](#4e-take-a-screenshot)
-
   - [5. Post results to Jira and attach screenshots](#5-post-results-to-jira-and-attach-screenshots)
     - [5a. Post results table](#5a-post-results-table)
     - [5b. Zip and attach screenshots](#5b-zip-and-attach-screenshots)
     - [5c. Attach links.json](#5c-attach-linksjson)
 - [Notes](#notes)
   - [Bandit game HUD — automation constraints](#bandit-game-hud--automation-constraints)
+  - [Expected warnings — game bet-ladder limits](#expected-warnings--game-bet-ladder-limits)
   - [links.json structure](#linksjson-structure-reference)
   - [DOM structure reference](#dom-structure-reference-verified-against-dragonunchaineddesktop)
     - [Phase 1 — Preloader](#phase-1--preloader)
@@ -58,6 +59,19 @@ The following parameters are required before starting:
 | `game_name` | `dragonUnchainedDesktop` | Game name as registered in Axiom. Can be extracted from the game's Axiom launch link as the `gameId` URL parameter. |
 | `max_win` | `5486.5` | Game's maximum win multiplier (x times bet, bet-normalised). Used to calculate MaxBet for exposure-based operators: `MaxBet = Exposure / max_win`. |
 
+
+## Environment setup
+
+The browser automation runs via **Playwright** with the system Python (no venv). Run once per agent environment if not already installed:
+
+```bash
+pip3 install playwright
+python3 -m playwright install chromium
+```
+
+> **Note:** `python3-venv` / `python3.12-venv` may not be available in the cloud agent image. Use system Python directly — `pip3 install` works without a venv.
+
+The `golden-bet-scripts` tool also uses system Python. No venv setup is needed there either; just call `python3 main.py ...` directly.
 
 ## Task Progress
 
@@ -101,7 +115,7 @@ Use the `golden-bet-scripts` tool to generate links for all operators:
 
 ```bash
 cd tools/golden-bet-scripts
-.venv/bin/python main.py \
+python3 main.py \
   --axiom-name <axiom_name> \
   --api-key <api_key> \
   --game-name <game_name> \
@@ -126,6 +140,19 @@ Then scale per currency multiplier (×1 GBP, ×5 MYR, ×10 ZAR, ×20 ZMW, ×50 P
 See the `golden-standard-bet-settings` skill for the full list of exposure operators and currency multipliers.
 
 ### 4. Verify each link and capture screenshots
+
+> **Automation shortcut:** Instead of following steps 4a–4e manually, you can run the **`verify.py`** script in this skill folder — it performs the full browser automation using Playwright (headless Chromium) and produces `results.json` plus one screenshot per combination:
+>
+> ```bash
+> python3 .cursor/skills/task-test-gsbs-scripts/verify.py \
+>   --links  tmp/gsbs_test_<game_name>/links.json \
+>   --max-win <max_win> \
+>   --output-dir tmp/gsbs_test_<game_name>
+> ```
+>
+> Screenshots land in `tmp/gsbs_test_<game_name>/screenshots/<operatorId>/<currency>.png`.
+> Results land in `tmp/gsbs_test_<game_name>/results.json`.
+> The script exits non-zero on any ❌ FAIL. Skip to [Step 5](#5-post-results-to-jira-and-attach-screenshots) once it completes.
 
 Create the screenshots folder structure:
 
@@ -231,14 +258,24 @@ Parse the returned JSON to obtain:
 > - GBP (`£`), MYR (`RM`), ZAR (`R`), ZMW (`K`), PHP (`₱`): comma thousands separator, period decimal — e.g. `1,234.56`
 > - JPY (`¥`): comma thousands separator, no decimal places — e.g. `1,000`
 > - CLP (`$`): **space** thousands separator, **comma** decimal — e.g. `1 000,00`
+> - EUR (`€`): **comma** decimal separator, no space thousands at typical bet values — e.g. `1,00` / `15,00`
+>
+> **⚠️ EUR parsing pitfall:** `1,00` means €1.00, not €100. The comma is a decimal separator here, not a thousands separator. Distinguish by checking whether a single comma is followed by exactly 2 digits at the end of the string (decimal) vs. 3 digits (thousands). See `verify.py` for the reference implementation.
 >
 > For numeric comparison (MaxBet check), parse the raw string into a number using a helper that strips thousands separators and normalises the decimal marker:
 > ```js
 > function parseBetValue(str) {
->   // CLP uses space thousands + comma decimal; all others use comma thousands + period decimal
+>   // Strip currency symbols
+>   str = str.replace(/[£€₱]/g, '').replace(/^(RM|R|K|¥|\$)/, '').trim();
+>   // CLP: space thousands + comma decimal (e.g. "1 000,00")
 >   if (/\d \d/.test(str)) {
 >     return parseFloat(str.replace(/ /g, '').replace(',', '.'));
 >   }
+>   // EUR: single comma followed by exactly 2 digits (e.g. "1,00", "15,00")
+>   if (/,\d{2}$/.test(str) && !str.includes('.') && (str.match(/,/g) || []).length === 1) {
+>     return parseFloat(str.replace(',', '.'));
+>   }
+>   // GBP/JPY/USD/etc — comma is thousands separator
 >   return parseFloat(str.replace(/,/g, ''));
 > }
 > ```
@@ -312,6 +349,20 @@ Use the `jira-nailedit` skill to upload `tmp/gsbs_test_<game_name>/links.json` a
 ---
 
 ## Notes
+
+### Expected warnings — game bet-ladder limits
+
+Some operator/currency combinations produce ⚠️ WARNING results because the game's bet ladder tops out below half of the calculated exposure MaxBet. This is **not a script error** — it means the game simply doesn't offer bets that high for that currency. These warnings should be noted in the Jira comment but do not constitute a failure.
+
+Observed on dragonUnchainedDesktop (max_win=5486.5):
+
+| Operator | Currency | Game MaxBet | Allowed | Reason |
+|---|---|---|---|---|
+| 750KMaxExposure | ZMW | K1,000 | K2,733.80 | ZMW ladder tops at K1,000 |
+| Default200MaxExposure500k | USD | $40 | $91.13 | USD ladder tops at $40 for this operator |
+| Default200MaxExposure750k | USD | $40 | $136.69 | USD ladder tops at $40 for this operator |
+
+Other games with different bet ladders will produce different warning patterns. Always report warnings in the Jira comment so the game team can review.
 
 ### Bandit game HUD — automation constraints
 
@@ -483,12 +534,14 @@ CLP (`$`) — **space** thousands, **comma** decimal:
 
 **Currency symbol reference (as displayed in HUD and bet panel header):**
 
-| Currency | Symbol in game |
-|---|---|
-| GBP | `£` |
-| MYR | `RM` |
-| ZAR | `R` |
-| ZMW | `K` |
-| PHP | `₱` |
-| JPY | `¥` |
-| CLP | `$` |
+| Currency | Symbol in game | Decimal format |
+|---|---|---|
+| GBP | `£` | period (`1,234.56`) |
+| MYR | `RM` | period (`1,234.56`) |
+| ZAR | `R` | period (`1,234.56`) |
+| ZMW | `K` | period (`1,234.56`) |
+| PHP | `₱` | period (`1,234.56`) |
+| JPY | `¥` | no decimals (`1,000`) |
+| CLP | `$` | space+comma (`1 000,00`) |
+| EUR | `€` | comma decimal (`1,00`) — ⚠️ see parsing pitfall above |
+| USD | `$` | period (`1,234.56`) |
