@@ -137,12 +137,14 @@ Use the **Rust binaries** (`rng-report-rs`) — much lower memory usage than the
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.json
    ```
 
-3. Generate Excel report:
+3. Generate Excel report — **wait for the JSON step to fully complete before starting this**:
    ```bash
    tools/rng-distribution-report-rust/target/release/generate_excel_report \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.json \
      tmp/results/<GameName><Variant>_<strategy>/<mid>-<variant>.xlsx
    ```
+
+> **Always run JSON and Excel generation sequentially, never in parallel.** Both tools are memory-intensive (JSON generation reads the full CSV; Excel generation peaks at ~5× the JSON file size). Running them concurrently risks OOM-killing either process. Complete and confirm each step before starting the next. The same applies across multiple variants — do not start JSON/Excel generation for a second variant while the first is still running.
 
 > **Memory note for `generate_excel_report`.** The tool reads the JSON file twice (two-pass design), keeping only one section in memory at a time. Peak RSS is roughly 5× the JSON file size. For a 1.9 GB JSON this is ~9–10 GB; on a 16 GB machine ensure all completed simulation processes are exited first. If the process is OOM-killed (exit code 137), free memory by killing idle tmux sessions and retry.
 

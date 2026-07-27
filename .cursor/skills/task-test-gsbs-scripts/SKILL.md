@@ -13,9 +13,11 @@ description: >-
 
 ## Overview
 
-<!-- TODO -->
+This task verifies that GSBS SQL scripts have been correctly applied on the target Axiom environment. The SQL files are assumed to have already been generated and executed against Axiom before this task starts — there is nothing to generate or deploy. The sole purpose of this task is to open the game for each operator/currency combination and confirm that the bet settings (DefaultBet, MaxBet) visible in-game match what the GSBS scripts configured.
 
 ## Prerequisites
+
+The GSBS SQL scripts must already be generated and executed against the target Axiom environment before starting. This task only verifies the result — it does not generate or apply any SQL.
 
 The following parameters are required before starting:
 
